@@ -140,7 +140,7 @@
                     <h2>Featured Products</h2>
                 </div>
                 <div class="row pb-3">
-                    @if ($isFeatured_products->isNotEmpty())
+                    @if($isFeatured_products->isNotEmpty())
                         @foreach ($isFeatured_products as $product)
                             @php
                                 $productImages = $product->product_images->first();

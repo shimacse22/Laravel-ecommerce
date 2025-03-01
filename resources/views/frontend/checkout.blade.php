@@ -62,7 +62,7 @@
                                                                 {{ !empty($customerAddress) && $customerAddress->country_id == $country->id ? 'selected' : '' }}
                                                                 value="{{ $country->id }}">{{ $country->name }}</option>
                                                         @endforeach
-                                                        <option value="">Rest of the world</option>
+                                                     
                                                     @endif
 
                                                 </select>
@@ -195,28 +195,23 @@
                                     <label for="method2">Stripe</label>
                                 </div>
                                 <div class="card-body p-0 mt-3 d-none" id="card-payment-form">
-                                    <div class="mb-3">
-                                        <label for="card_number" class="mb-2">Card Number</label>
-                                        <input type="text" name="card_number" id="card_number"
-                                            placeholder="Valid Card Number" class="form-control">
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <label for="expiry_date" class="mb-2">Expiry Date</label>
-                                            <input type="text" name="expiry_date" id="expiry_date"
-                                                placeholder="MM/YYYY" class="form-control">
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="expiry_date" class="mb-2">CVV Code</label>
-                                            <input type="text" name="expiry_date" id="expiry_date" placeholder="123"
-                                                class="form-control">
-                                        </div>
-                                    </div>
+                                    <input type="hidden" name="stripeToken" id="stripe-token">
+                                    <div id="card-element" class="form-control">
 
+                                    </div>
+                                    
                                 </div>
+                                <div class="">
+                                    <input type="radio" name="payment_method" value='aamarpay' id='method3'>
+                                    <label for="method3">BKash/Rocket/Nagad</label>
+                                </div>
+                                <div class="bkash-button-container d-none">
+                                    <button type="button" id="bkash_button" class="btn btn-danger w-100">Pay with bKash</button>
+                                </div>
+                                
                                 <div class="pt-4">
                                     {{-- <a href="#" class="btn-dark btn btn-block w-100">Pay Now</a> --}}
-                                    <button type="submit" class="btn-dark btn btn-block w-100">Pay Now</button>
+                                    <button type="submit" class="btn-dark btn btn-block w-100" onclick="createToken()">Pay Now</button>
                                 </div>
                             </div>
                             <!-- CREDIT CARD FORM ENDS HERE -->
@@ -228,6 +223,249 @@
     </main>
 @endsection
 @section('customJS')
+{{-- <script src="https://js.stripe.com/v3/"></script>
+<script>
+ var stripe = Stripe('{{ env("STRIPE_KEY") }}');
+    var elements = stripe.elements();
+    var cardElement = elements.create('card');
+    cardElement.mount('#card-element');
+    function createToken(){
+                stripe.createToken(cardElement).then(function(result) {
+        // Handle result.error or result.token
+        console.log(result);
+        if(result.token){
+            document.getElementById("stripe-token").value=result.token.id;
+        }
+        });
+    }
+  
+</script> --}}
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    var stripe = Stripe('{{ env("STRIPE_KEY") }}');
+    var elements = stripe.elements();
+    var cardElement = elements.create('card');
+    cardElement.mount('#card-element');
+
+    // Toggle card payment form visibility
+    $("#method1").click(function() {
+        if ($(this).is(":checked")) {
+            $("#card-payment-form").addClass("d-none");
+        }
+    });
+
+    $("#method2").click(function() {
+        if ($(this).is(":checked")) {
+            $("#card-payment-form").removeClass("d-none");
+        }
+    });
+
+    // Order form submission
+    $("#orderForm").submit(function(event) {
+        event.preventDefault();
+        var form = $(this);
+        var paymentMethod = $("input[name='payment_method']:checked").val();
+
+        if (paymentMethod === 'stripe') {
+            // Stripe payment method selected
+            stripe.createToken(cardElement).then(function(result) {
+                if (result.error) {
+                    alert(result.error.message);  // Show error to the user
+                } else {
+                    // Append Stripe token to form
+                    $("<input>").attr({
+                        type: "hidden",
+                        name: "stripeToken",
+                        value: result.token.id
+                    }).appendTo(form);
+
+                    // Submit the form with AJAX for Stripe
+                    processCheckout(form);
+                }
+            });
+        } else {
+            // Normal form submission for other payment methods
+            processCheckout(form);
+        }
+    });
+
+    // Function to process checkout
+    function processCheckout(form) {
+        $.ajax({
+            url: '{{ route('front.processCheckout') }}',
+            type: 'POST',
+            data: form.serialize(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.status) {
+                    // Reset validation errors and show success
+                    $("#first_name").siblings("p").removeClass("invalid-feedback").html('');
+                    $("#first_name").removeClass("is-invalid");
+
+                    $("#last_name").siblings("p").removeClass("invalid-feedback").html('');
+                    $("#last_name").removeClass("is-invalid");
+
+                    $("#mobile").siblings("p").removeClass("invalid-feedback").html('');
+                    $("#mobile").removeClass("is-invalid");
+
+                    $("#email").siblings("p").removeClass("invalid-feedback").html('');
+                    $("#email").removeClass("is-invalid");
+
+                    $("#country").siblings("p").removeClass("invalid-feedback").html('');
+                    $("#country").removeClass("is-invalid");
+
+                    $("#address").siblings("p").removeClass("invalid-feedback").html('');
+                    $("#address").removeClass("is-invalid");
+
+                    $("#city").siblings("p").removeClass("invalid-feedback").html('');
+                    $("#city").removeClass("is-invalid");
+
+                    $("#state").siblings("p").removeClass("invalid-feedback").html('');
+                    $("#state").removeClass("is-invalid");
+
+                    $("#zip").siblings("p").removeClass("invalid-feedback").html('');
+                    $("#zip").removeClass("is-invalid");
+
+                    // Redirect to the thank you page
+                    window.location.href = "{{ url('/thankyou/') }}/" + response.orderId;
+                } else {
+                    // Handle errors if the response status is false
+                    var errors = response.errors;
+
+                    if (errors.first_name) {
+                        $("#first_name").siblings("p").addClass("invalid-feedback").html(errors.first_name);
+                        $("#first_name").addClass("is-invalid");
+                    } else {
+                        $("#first_name").siblings("p").removeClass("invalid-feedback").html('');
+                        $("#first_name").removeClass("is-invalid");
+                    }
+
+                    if (errors.last_name) {
+                        $("#last_name").siblings("p").addClass("invalid-feedback").html(errors.last_name);
+                        $("#last_name").addClass("is-invalid");
+                    } else {
+                        $("#last_name").siblings("p").removeClass("invalid-feedback").html('');
+                        $("#last_name").removeClass("is-invalid");
+                    }
+
+                    if (errors.mobile) {
+                        $("#mobile").siblings("p").addClass("invalid-feedback").html(errors.mobile);
+                        $("#mobile").addClass("is-invalid");
+                    } else {
+                        $("#mobile").siblings("p").removeClass("invalid-feedback").html('');
+                        $("#mobile").removeClass("is-invalid");
+                    }
+
+                    if (errors.email) {
+                        $("#email").siblings("p").addClass("invalid-feedback").html(errors.email);
+                        $("#email").addClass("is-invalid");
+                    } else {
+                        $("#email").siblings("p").removeClass("invalid-feedback").html('');
+                        $("#email").removeClass("is-invalid");
+                    }
+
+                    if (errors.country) {
+                        $("#country").siblings("p").addClass("invalid-feedback").html(errors.country);
+                        $("#country").addClass("is-invalid");
+                    } else {
+                        $("#country").siblings("p").removeClass("invalid-feedback").html('');
+                        $("#country").removeClass("is-invalid");
+                    }
+
+                    if (errors.address) {
+                        $("#address").siblings("p").addClass("invalid-feedback").html(errors.address);
+                        $("#address").addClass("is-invalid");
+                    } else {
+                        $("#address").siblings("p").removeClass("invalid-feedback").html('');
+                        $("#address").removeClass("is-invalid");
+                    }
+
+                    if (errors.city) {
+                        $("#city").siblings("p").addClass("invalid-feedback").html(errors.city);
+                        $("#city").addClass("is-invalid");
+                    } else {
+                        $("#city").siblings("p").removeClass("invalid-feedback").html('');
+                        $("#city").removeClass("is-invalid");
+                    }
+
+                    if (errors.state) {
+                        $("#state").siblings("p").addClass("invalid-feedback").html(errors.state);
+                        $("#state").addClass("is-invalid");
+                    } else {
+                        $("#state").siblings("p").removeClass("invalid-feedback").html('');
+                        $("#state").removeClass("is-invalid");
+                    }
+
+                    if (errors.zip) {
+                        $("#zip").siblings("p").addClass("invalid-feedback").html(errors.zip);
+                        $("#zip").addClass("is-invalid");
+                    } else {
+                        $("#zip").siblings("p").removeClass("invalid-feedback").html('');
+                        $("#zip").removeClass("is-invalid");
+                    }
+                }
+            },
+            error: function(jqXHR, exception) {
+                console.log('Something went wrong');
+            }
+        });
+    }
+</script>
+{{-- <script src="https://js.stripe.com/v3/"></script>
+<script>
+    var stripe = Stripe('{{ env("STRIPE_KEY") }}');
+    var elements = stripe.elements();
+    var cardElement = elements.create('card');
+    cardElement.mount('#card-element');
+
+    $("#orderForm").submit(function(event) {
+        event.preventDefault();
+        var form = $(this);
+        var paymentMethod = $("input[name='payment_method']:checked").val();
+
+        if (paymentMethod === 'stripe') {
+            stripe.createToken(cardElement).then(function(result) {
+                if (result.error) {
+                    alert(result.error.message);  // Show error to the user
+                } else {
+                    // Append Stripe token to form
+                    $("<input>").attr({
+                        type: "hidden",
+                        name: "stripeToken",
+                        value: result.token.id
+                    }).appendTo(form);
+
+                    // Submit the form with AJAX
+                    processCheckout(form);
+                }
+            });
+        } else {
+            // Submit form normally for other payment methods
+            processCheckout(form);
+        }
+    });
+
+    function processCheckout(form) {
+        $.ajax({
+            url: '{{ route('front.processCheckout') }}',
+            type: 'POST',
+            data: form.serialize(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.status) {
+                    window.location.href = "{{ url('/thankyou/') }}/" + response.orderId;
+                } else {
+                    alert("Payment failed. Please try again.");
+                }
+            },
+            error: function(jqXHR, exception) {
+                console.log('Something went wrong');
+            }
+        });
+    }
+</script>
+   
+
     <script type="text/javascript">
         $("#method1").click(function() {
             if ($(this).is(":checked")) {
@@ -362,7 +600,7 @@
                     console.log('something went wrong');
                 }
             });
-        });
+        }); --}}
 
         $("#country").change(function() {
             $.ajax({
@@ -430,4 +668,7 @@
 
         })
     </script>
+  
+   
+    
 @endsection

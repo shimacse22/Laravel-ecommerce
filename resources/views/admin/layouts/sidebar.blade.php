@@ -62,6 +62,13 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a href="{{ route('payment.gateway') }}" class="nav-link">
+                        <!-- <i class="nav-icon fas fa-tag"></i> -->
+                        <i class="fas fa-truck nav-icon"></i>
+                        <p>Payment Gateway</p>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a href="{{ route('admin.orderDetails') }}" class="nav-link">
                         <i class="nav-icon fas fa-shopping-bag"></i>
                         <p>Orders</p>

@@ -179,7 +179,6 @@ class ProductController extends Controller
             'title' =>'required',
             'slug' =>'required|unique:products,slug,'.$product->id.',id',
             'price'=>'required|numeric',
-            'is_featured'=>'required',
             'sku'=>'required|unique:products,sku,'.$product->id.',id',
             'barcode'=>'required',
             'track_qty'=>'required|in:Yes,No',
@@ -212,6 +211,7 @@ class ProductController extends Controller
             $product->sku=$request->sku;
             $product->barcode=$request->barcode;
             $product->track_qty=$request->track_qty;
+            $product->is_featured=$request->is_featured;
             $product->qty=$request->qty;
             $product->status=$request->status;
             $product->short_description=$request->short_description;

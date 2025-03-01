@@ -1,5 +1,5 @@
 <?php
-
+use App\Http\Controllers\BkashPaymentController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
@@ -96,7 +96,7 @@ Route::group(['prefix'=>'admin'],function(){
 
     //tempImage route
       Route::post('/tempImage',[TempImagesController::class,'create'] )->name('temp-images.create');
-
+      
     //All Pages Route
      Route::get('/pages',[PagesController::class,'index'] )->name('page.index');
      Route::get('/page/create',[PagesController::class,'create'] )->name('page.create');
@@ -210,6 +210,11 @@ Route::get('getSlug',function(Request $request){
         'slug'=> $slug
     ]);
 })->name('getSlug');
+
+// Payment gateway route
+
+Route::get('/payment-gateway',[CartController::class,'paymentGateway'] )->name('payment.gateway');
+Route::post('/update-aamarpay',[CartController::class,'updateAamarpay'] )->name('update.aamarpay');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

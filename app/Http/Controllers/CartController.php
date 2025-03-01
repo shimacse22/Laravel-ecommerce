@@ -13,7 +13,11 @@ use App\Models\DiscountCoupon;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
-use Gloudemans\Shoppingcart\Facades\Cart; 
+use Gloudemans\Shoppingcart\Facades\Cart;
+use Illuminate\Support\Facades\DB;
+use Stripe\Stripe;
+use Stripe\PaymentIntent;
+
 
 class CartController extends Controller
 {
@@ -261,7 +265,7 @@ class CartController extends Controller
  //store data in order table
     if($request->payment_method=='cod'){
         $couponCode="";
-        $couponCodeId="";
+        $couponCodeId=null;
         $subTotal= Cart::subtotal(2,'.','');
         $shipping=0;
         $discount=0;
@@ -285,7 +289,7 @@ class CartController extends Controller
 
         }
 
-       // $grandTotal=$subTotal+$shipping;
+       // search shipping amount from database
 
         $shippingInfo=ShippingCharge::where('country_id',$request->country)->first();
 
@@ -384,9 +388,145 @@ class CartController extends Controller
 
 
     }
-    else{
-
+    elseif($request->payment_method=='stripe') {
+        // Validate if stripeToken is present
+    if (!$request->has('stripeToken')) {
+        return response()->json([
+            'status' => false,
+            'message' => 'Stripe token is missing. Please try again.',
+        ], 400);
     }
+
+    // Calculate Order Total
+     $couponCode="";
+     $couponCodeId=null;
+     $subTotal= Cart::subtotal(2,'.','');
+     $shipping=0;
+     $discount=0;
+    
+
+     //Apply discount here
+
+     if(session()->has('code')){
+
+         $code=session()->get('code');
+
+         if($code->type=="percent"){
+             $discount=($code->discount_amount/100)* $subTotal;
+         }
+         else{
+             $discount=$code->discount_amount;
+         }
+
+         $couponCode=$code->code;
+         $couponCodeId=$code->id;
+
+     }
+
+    // search shipping amount from database
+
+     $shippingInfo=ShippingCharge::where('country_id',$request->country)->first();
+
+        
+     $totalQty=0;
+     foreach(Cart::content() as $item){
+         $totalQty +=$item->qty;
+     }
+     //check if select country is match with database shipping_charges table or not
+     if($shippingInfo !=null){
+
+         //check total shipping charge
+ 
+         $shipping=$totalQty*$shippingInfo->amount;
+         $grandTotal=($subTotal-$discount)+$shipping;
+
+     }
+     else{
+         $shippingInfo=ShippingCharge::where('country_id','rest_of_world')->first();
+
+        
+         //check total shipping charge
+ 
+         $shipping=$totalQty*$shippingInfo->amount;
+         $grandTotal=($subTotal-$discount)+$shipping;
+
+         
+
+     }
+
+    // Create Order
+    $order = Order::create([
+        'subtotal' => $subTotal,
+        'grand_total' => $grandTotal,
+        'shipping' => $shipping,
+        'discount' => $discount,
+        'coupon_code' => $couponCode,
+        'coupon_code_id' => $couponCodeId,
+        'payment_status' => 'not paid',
+        'status' => 'pending',
+        'user_id' => Auth::id(),
+        'first_name' => $request->first_name,
+        'last_name' => $request->last_name,
+        'mobile' => $request->mobile,
+        'email' => $request->email,
+        'country_id' => $request->country,
+        'address' => $request->address,
+        'city' => $request->city,
+        'state' => $request->state,
+        'zip' => $request->zip,
+        'apartment' => $request->apartment,
+        'notes' => $request->order_notes,
+    ]);
+
+    // Store Order Items
+    foreach (Cart::content() as $item) {
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $item->id,
+            'name' => $item->name,
+            'qty' => $item->qty,
+            'price' => $item->price,
+            'total' => $item->price * $item->qty,
+        ]);
+    }
+
+    // Process Stripe Payment
+    \Stripe\Stripe::setApiKey(env("STRIPE_SECRET"));
+
+    try {
+        $charge = \Stripe\Charge::create([
+            'amount' => $grandTotal * 100, // Convert to cents
+            'currency' => 'usd',
+            'source' => $request->stripeToken,
+            'metadata' => [
+                'order_id' => $order->id,
+            ],
+            'description' => "Order #{$order->id} from Laravel eCommerce",
+        ]);
+
+        // Update order payment status
+        $order->update(['payment_status' => 'paid']);
+
+        // Clear cart & session
+        Cart::destroy();
+        session()->forget('code');
+
+        return response()->json([
+            'status' => true,
+            'orderId' => $order->id,
+            'message' => 'Payment successful. Your order has been placed!',
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => false,
+            'message' => 'Payment failed: ' . $e->getMessage(),
+        ]);
+    }
+    }
+
+
+
+   
 
 
     }
@@ -594,6 +734,26 @@ class CartController extends Controller
 
         ]);
 
+    }
+
+    //Payment Gateway
+
+    public function paymentGateway(){
+        $aamarpay= DB::table('payment_gatway')->first();
+        $surjopay= DB::table('payment_gatway')->skip(1)->first();
+        $sslcommerz= DB::table('payment_gatway')->skip(2)->first();
+
+        return view('admin.payment_gateway.edit',compact('aamarpay','surjopay','sslcommerz'));
+    }
+
+    public function updateAamarpay(Request $request){
+        $data=array();
+        $data['store_id']=$request->store_id;
+        $data['signature_key']=$request->signature_key;
+        $data['status']=$request->status;
+        DB::table('payment_gatway')->where('id',$request->id)->update($data);
+        return redirect()->back()->with('success','Aamarpay Update successfully');
+    
     }
     
 }
